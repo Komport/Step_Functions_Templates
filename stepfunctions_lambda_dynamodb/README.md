@@ -17,6 +17,6 @@ ProjectName: Set your project name.
 StateFileLocation: S3 Bucket name where your state file resides. 
 StateFileName: Your state file name with extension. 
 
-[![StateFunctions](StateFunctions "StateFunctions")](https://github.com/Komport/Step_Functions_Templates/blob/c86a318eb9d35fdb281200ccead61e4dc7826c6a/stepfunctions_lambda_dynamodb/images/State.JPG "StateFunctions")
+![](images/State.JPG)
 
 
