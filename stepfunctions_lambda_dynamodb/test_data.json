@@ -1,0 +1,15 @@
+{ "transactions": [
+    {"Type": "PURCHASE"},
+    {"Type": "REFUND"},
+    {"Type": "PURCHASE"},
+    {"Type": "REFUND"},
+    {"Type": "PURCHASE"},
+    {"Type": "REFUND"},
+    {"Type": "PURCHASE"},
+    {"Type": "REFUND"},
+    {"Type": "PURCHASE"},
+    {"Type": "REFUND"},
+    {"Type": "REFUND"},
+    {"Type": "PURCHASE"}
+      ]
+  }

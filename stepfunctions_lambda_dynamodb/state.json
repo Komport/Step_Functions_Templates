@@ -1,0 +1,108 @@
+{
+    "StartAt": "Validate-All",
+    "States": {
+      "Validate-All": {
+        "Type": "Map",
+        "InputPath": "$",
+        "ItemsPath": "$.transactions",
+        "MaxConcurrency": 0,
+        "Iterator": {
+          "StartAt": "Validate",
+          "States": {
+            "Validate": {
+              "Type": "Task",
+              "Resource": "arn:aws:lambda:us-east-1:587164557221:function:StepFunctionsIteration",
+              "Next": "ProcessTransaction"
+            },
+            "ProcessTransaction": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.Type",
+                  "StringEquals": "PURCHASE",
+                  "Next": "ProcessPurchase"
+                },
+                {
+                  "Variable": "$.Type",
+                  "StringEquals": "REFUND",
+                  "Next": "ProcessRefund"
+                }
+              ]
+            },
+            "ProcessRefund": {
+              "Type": "Task",
+              "Resource": "arn:aws:lambda:us-east-1:587164557221:function:RefundFunction",
+              "Next": "DynamoTableSelection"
+            },
+            "ProcessPurchase": {
+              "Type": "Task",
+              "Resource": "arn:aws:lambda:us-east-1:587164557221:function:PurchaseFunction",
+              "Next": "DynamoTableSelection"
+            },
+            "DynamoTableSelection": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.Type",
+                  "StringEquals": "PURCHASE",
+                  "Next": "InsertPurchase"
+                },
+                {
+                  "Variable": "$.Type",
+                  "StringEquals": "REFUND",
+                  "Next": "InsertRefund"
+                }
+              ]
+            },
+            "InsertPurchase": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::dynamodb:putItem",
+              "Parameters": {
+                "TableName": "PurchaseTable",
+                "Item": {
+                  "TransactionId": {
+                    "S.$": "$.TransactionId"
+                  },
+                  "Type": {
+                    "S.$": "$.Type"
+                  },
+                  "Timestamp": {
+                    "S.$": "$.Timestamp"
+                  },
+                  "Message": {
+                    "S.$": "$.Message"
+                  }
+                  
+                }
+              },
+              "End": true
+            },
+            "InsertRefund": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::dynamodb:putItem",
+              "Parameters": {
+                "TableName": "RefundTable",
+                "Item": {
+                  "TransactionId": {
+                    "S.$": "$.TransactionId"
+                  },
+                  "Type": {
+                    "S.$": "$.Type"
+                  },
+                  "Timestamp": {
+                    "S.$": "$.Timestamp"
+                  },
+                  "Message": {
+                    "S.$": "$.Message"
+                  }
+                }
+              },
+              "End": true
+            }
+          }
+        },
+        "ResultPath": "$",
+        "End": true
+      }
+    }
+  }
