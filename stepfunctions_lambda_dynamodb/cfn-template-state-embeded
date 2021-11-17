@@ -1,0 +1,303 @@
+Parameters: 
+  ProjectName:
+    Type: String
+    Default: MySimpleProject
+    MinLength: 3
+    MaxLength: 30
+    AllowedPattern:  ^[a-zA-Z0-9]*$
+    Description: 'A project name to set.'
+
+Resources:
+  # Step functions state machine
+  StateMachineTransactionHandler:
+    Type: 'AWS::StepFunctions::StateMachine'
+    Properties:
+      StateMachineName: !Join
+        - '-'
+        - - !Ref ProjectName
+          - 'StateMachine'
+      DefinitionString: !Sub |
+        {
+          "StartAt": "Validate-All",
+          "States": {
+            "Validate-All": {
+              "Type": "Map",
+              "InputPath": "$",
+              "ItemsPath": "$.transactions",
+              "MaxConcurrency": 0,
+              "Iterator": {
+                "StartAt": "Validate",
+                "States": {
+                  "Validate": {
+                    "Type": "Task",
+                    "Resource": "arn:aws:lambda:us-east-1:587164557221:function:StepFunctionsIteration",
+                    "Next": "ProcessTransaction"
+                  },
+                  "ProcessTransaction": {
+                    "Type": "Choice",
+                    "Choices": [
+                      {
+                        "Variable": "$.Type",
+                        "StringEquals": "PURCHASE",
+                        "Next": "ProcessPurchase"
+                      },
+                      {
+                        "Variable": "$.Type",
+                        "StringEquals": "REFUND",
+                        "Next": "ProcessRefund"
+                      }
+                    ]
+                  },
+                  "ProcessRefund": {
+                    "Type": "Task",
+                    "Resource": "arn:aws:lambda:us-east-1:587164557221:function:RefundFunction",
+                    "Next": "DynamoTableSelection"
+                  },
+                  "ProcessPurchase": {
+                    "Type": "Task",
+                    "Resource": "arn:aws:lambda:us-east-1:587164557221:function:PurchaseFunction",
+                    "Next": "DynamoTableSelection"
+                  },
+                  "DynamoTableSelection": {
+                    "Type": "Choice",
+                    "Choices": [
+                      {
+                        "Variable": "$.Type",
+                        "StringEquals": "PURCHASE",
+                        "Next": "InsertPurchase"
+                      },
+                      {
+                        "Variable": "$.Type",
+                        "StringEquals": "REFUND",
+                        "Next": "InsertRefund"
+                      }
+                    ]
+                  },
+                  "InsertPurchase": {
+                    "Type": "Task",
+                    "Resource": "arn:aws:states:::dynamodb:putItem",
+                    "Parameters": {
+                      "TableName": "PurchaseTable",
+                      "Item": {
+                        "TransactionId": {
+                          "S.$": "$.TransactionId"
+                        },
+                        "Type": {
+                          "S.$": "$.Type"
+                        },
+                        "Timestamp": {
+                          "S.$": "$.Timestamp"
+                        },
+                        "Message": {
+                          "S.$": "$.Message"
+                        }
+                        
+                      }
+                    },
+                    "End": true
+                  },
+                  "InsertRefund": {
+                    "Type": "Task",
+                    "Resource": "arn:aws:states:::dynamodb:putItem",
+                    "Parameters": {
+                      "TableName": "RefundTable",
+                      "Item": {
+                        "TransactionId": {
+                          "S.$": "$.TransactionId"
+                        },
+                        "Type": {
+                          "S.$": "$.Type"
+                        },
+                        "Timestamp": {
+                          "S.$": "$.Timestamp"
+                        },
+                        "Message": {
+                          "S.$": "$.Message"
+                        }
+                      }
+                    },
+                    "End": true
+                  }
+                }
+              },
+              "ResultPath": "$",
+              "End": true
+            }
+          }
+        }
+      RoleArn: !GetAtt 'RoleStepFunctionsLambdaDynamoDb.Arn'
+
+  #Lambda Functions -> PurchaseFunction & RefundFunction
+  FunctionPurchase: #Lambda Function to manage Purchase
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: 'PurchaseFunction' 
+      Code:
+        ZipFile: |
+          import datetime
+          def process_purchase(message, context):
+
+              response = {}
+              response['TransactionId'] = message['TransactionId']
+              response['Type'] = message['Type']
+              response['Timestamp'] = datetime.datetime.now().strftime("%Y-%m-%d %H-%M-%S")
+              response['Message'] = 'Hello from lambda land inside the ProcessPurchase function'
+
+              return response
+
+      Handler: 'index.process_purchase'
+      Role: !GetAtt 'RolePurchaseFunction.Arn'
+      Runtime: 'python3.8'
+
+  FunctionRefund: #Lambda Function to manage Refunds
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: 'RefundFunction' 
+      Code:
+        ZipFile: |
+          import datetime
+          def process_refund(message, context):
+
+            response = {}
+            response['TransactionId'] = message['TransactionId']
+            response['Type'] = message['Type']
+            response['Timestamp'] = datetime.datetime.now().strftime("%Y-%m-%d %H-%M-%S")
+            response['Message'] = 'Hello from lambda land inside the ProcessRefund function'
+
+            return response
+
+      Handler: 'index.process_refund'
+      Role: !GetAtt 'RoleRefundFunction.Arn'
+      Runtime: 'python3.8'
+
+  #DynamoDB Tables -> PurchaseTable & RefundTable
+  DynamoDBPurchaseTable:
+    Type: AWS::DynamoDB::Table
+    Properties: 
+      AttributeDefinitions:
+        -
+          AttributeName: "TransactionId"
+          AttributeType:  "S"
+      KeySchema:
+        -
+          AttributeName: "TransactionId"
+          KeyType:  "HASH" 
+      ProvisionedThroughput: 
+        ReadCapacityUnits: "5"
+        WriteCapacityUnits: "5"
+      TableName: "PurchaseTable"
+
+  DynamoDBRefundTable:
+    Type: AWS::DynamoDB::Table
+    Properties: 
+      AttributeDefinitions:
+        -
+          AttributeName: "TransactionId"
+          AttributeType:  "S"
+      KeySchema:
+        -
+          AttributeName: "TransactionId"
+          KeyType:  "HASH"
+      ProvisionedThroughput: 
+        ReadCapacityUnits: "5"
+        WriteCapacityUnits: "5" 
+      TableName: "RefundTable"
+
+  # IAM roles
+  RolePurchaseFunction: #PurchaseFunction IAM Role
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: !Join
+        - '-'
+        - - Role
+          - !Ref ProjectName
+          - !Ref AWS::Region
+          - 'FunctionPurchase'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: 'lambda.amazonaws.com'
+          Action: 'sts:AssumeRole'
+      Policies:
+      - PolicyName: AWSLambdaBasicExecutionRole
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action: 'lambda:InvokeFunction'
+            Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:StepFunctionsIteration/*'
+    
+  RoleRefundFunction: #RefundFunction IAM Role
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: !Join
+        - '-'
+        - - Role
+          - !Ref ProjectName
+          - !Ref AWS::Region
+          - 'FunctionRefund'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: 'lambda.amazonaws.com'
+          Action: 'sts:AssumeRole'
+      Policies:
+      - PolicyName: AWSLambdaBasicExecutionRole
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action: 'lambda:InvokeFunction'
+            Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:StepFunctionsIteration/*'
+
+  RoleStepFunctionsLambdaDynamoDb: #State Machine role to touch DynamoDB and Lambda functions
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: !Join
+        - '-'
+        - - Role
+          - !Ref ProjectName
+          - !Ref AWS::Region
+          - 'StateMachineTransactionHandler'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: !Sub 'states.${AWS::Region}.amazonaws.com'
+          Action: 'sts:AssumeRole'
+      Policies:
+      - PolicyName: LambdaInvokeFunction
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action: 'lambda:InvokeFunction'
+            Resource:
+            - !Sub 'arn:aws:lambda:*:${AWS::AccountId}:function:*'
+
+      - PolicyName: DynamoDbPutMessage
+        PolicyDocument: 
+          Statement:
+          - Effect: Allow 
+            Action: 
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:UpdateTable
+            Resource: 
+            - !GetAtt 'DynamoDBPurchaseTable.Arn'
+            - !GetAtt 'DynamoDBRefundTable.Arn'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'  
+
+Outputs: 
+  StateMachineRoleName:
+    Description: Name Generated for state machine IAM role.
+    Value: !Ref RoleStepFunctionsLambdaDynamoDb
+  LambdaPurchaseFunctionRoleName:
+    Description: Name Generated for PurchaseFunction IAM role.
+    Value: !Ref RolePurchaseFunction
+  LambdaRefundFunctionRoleName:
+    Description: Name Generated for RefundFunction IAM role.
+    Value: !Ref RoleRefundFunction
