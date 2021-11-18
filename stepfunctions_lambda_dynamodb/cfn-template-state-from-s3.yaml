@@ -28,6 +28,31 @@ Resources:
       RoleArn: !GetAtt 'RoleStepFunctionsLambdaDynamoDb.Arn'
 
   #Lambda Functions -> PurchaseFunction & RefundFunction
+  FunctionValidator: #Lambda Function for validation
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: 'ValidatorFunction' 
+      Code:
+        ZipFile: |
+          import datetime
+          import uuid
+          def validate_all(message, context):
+
+              response = {}
+              transactionType = message['Type']
+              transactionId = uuid.uuid4()
+              response['TransactionId'] = str(transactionId)
+              if transactionType in ['PURCHASE','REFUND']:
+                response['Type'] = transactionType
+              else:
+                response['Type'] = 'ERROR'
+
+              return response
+
+      Handler: 'index.validate_all'
+      Role: !GetAtt 'RoleValidatorFunction.Arn'
+      Runtime: 'python3.8'
+
   FunctionPurchase: #Lambda Function to manage Purchase
     Type: 'AWS::Lambda::Function'
     Properties:
@@ -48,6 +73,7 @@ Resources:
       Handler: 'index.process_purchase'
       Role: !GetAtt 'RolePurchaseFunction.Arn'
       Runtime: 'python3.8'
+    DependsOn: FunctionValidator
 
   FunctionRefund: #Lambda Function to manage Refunds
     Type: 'AWS::Lambda::Function'
@@ -69,6 +95,29 @@ Resources:
       Handler: 'index.process_refund'
       Role: !GetAtt 'RoleRefundFunction.Arn'
       Runtime: 'python3.8'
+    DependsOn: FunctionValidator
+
+  FunctionError: #Lambda Function to manage Errors
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: 'ErrorFunction' 
+      Code:
+        ZipFile: |
+          import datetime
+          def process_refund(message, context):
+
+            response = {}
+            response['TransactionId'] = message['TransactionId']
+            response['Type'] = message['Type']
+            response['Timestamp'] = datetime.datetime.now().strftime("%Y-%m-%d %H-%M-%S")
+            response['Message'] = 'Hello from lambda land inside the ProcessError function'
+
+            return response
+
+      Handler: 'index.process_refund'
+      Role: !GetAtt 'RoleErrorFunction.Arn'
+      Runtime: 'python3.8'
+    DependsOn: FunctionValidator
 
   #DynamoDB Tables -> PurchaseTable & RefundTable
   DynamoDBPurchaseTable:
@@ -103,7 +152,48 @@ Resources:
         WriteCapacityUnits: "5" 
       TableName: "RefundTable"
 
+  DynamoDBErrorTable:
+    Type: AWS::DynamoDB::Table
+    Properties: 
+      AttributeDefinitions:
+        -
+          AttributeName: "TransactionId"
+          AttributeType:  "S"
+      KeySchema:
+        -
+          AttributeName: "TransactionId"
+          KeyType:  "HASH"
+      ProvisionedThroughput: 
+        ReadCapacityUnits: "5"
+        WriteCapacityUnits: "5" 
+      TableName: "ErrorTable"
+
   # IAM roles
+  RoleValidatorFunction: #VaidatorFunction IAM Role
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: !Join
+        - '-'
+        - - Role
+          - !Ref ProjectName
+          - !Ref AWS::Region
+          - 'FunctionValidator'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: 'lambda.amazonaws.com'
+          Action: 'sts:AssumeRole'
+      Policies:
+      - PolicyName: AWSLambdaBasicExecutionRole
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action: 'lambda:InvokeFunction'
+            Resource: !GetAtt 'StateMachineTransactionHandler.Arn'
+
+
   RolePurchaseFunction: #PurchaseFunction IAM Role
     Type: 'AWS::IAM::Role'
     Properties:
@@ -126,7 +216,7 @@ Resources:
           Statement:
           - Effect: Allow
             Action: 'lambda:InvokeFunction'
-            Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:StepFunctionsIteration/*'
+            Resource: !GetAtt 'FunctionValidator.Arn'
     
   RoleRefundFunction: #RefundFunction IAM Role
     Type: 'AWS::IAM::Role'
@@ -150,7 +240,31 @@ Resources:
           Statement:
           - Effect: Allow
             Action: 'lambda:InvokeFunction'
-            Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:StepFunctionsIteration/*'
+            Resource: !GetAtt 'FunctionValidator.Arn'
+    
+  RoleErrorFunction: #PurchaseFunction IAM Role
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: !Join
+        - '-'
+        - - Role
+          - !Ref ProjectName
+          - !Ref AWS::Region
+          - 'FunctionError'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: 'lambda.amazonaws.com'
+          Action: 'sts:AssumeRole'
+      Policies:
+      - PolicyName: AWSLambdaBasicExecutionRole
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action: 'lambda:InvokeFunction'
+            Resource: !GetAtt 'FunctionValidator.Arn'
 
   RoleStepFunctionsLambdaDynamoDb: #State Machine role to touch DynamoDB and Lambda functions
     Type: 'AWS::IAM::Role'
@@ -188,6 +302,7 @@ Resources:
             Resource: 
             - !GetAtt 'DynamoDBPurchaseTable.Arn'
             - !GetAtt 'DynamoDBRefundTable.Arn'
+            - !GetAtt 'DynamoDBErrorTable.Arn'
       ManagedPolicyArns:
         - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'  
 
