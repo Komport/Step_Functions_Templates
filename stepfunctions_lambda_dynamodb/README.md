@@ -62,4 +62,7 @@ StateFileName: Your state file name with extension.
 
 ![](images/State.JPG)
 
+### CloudFormation view
+
+![](images/CF.JPG)
 
