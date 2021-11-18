@@ -30,7 +30,7 @@ Resources:
                 "States": {
                   "Validate": {
                     "Type": "Task",
-                    "Resource": "arn:aws:lambda:us-east-1:587164557221:function:ValidatorFunction",
+                    "Resource": "Replace with your ValidatorFunction ARN",
                     "Next": "ProcessTransaction"
                   },
                   "ProcessTransaction": {
@@ -51,17 +51,17 @@ Resources:
                   },
                   "ProcessRefund": {
                     "Type": "Task",
-                    "Resource": "arn:aws:lambda:us-east-1:587164557221:function:RefundFunction",
+                    "Resource": "Replace with your RefundFunction ARN",
                     "Next": "DynamoTableSelection"
                   },
                   "ProcessPurchase": {
                     "Type": "Task",
-                    "Resource": "arn:aws:lambda:us-east-1:587164557221:function:PurchaseFunction",
+                    "Resource": "Replace with your PurchaseFunction ARN",
                     "Next": "DynamoTableSelection"
                   },
                   "ProcessError": {
                     "Type": "Task",
-                    "Resource": "arn:aws:lambda:us-east-1:587164557221:function:ErrorFunction",
+                    "Resource": "Replace with your ErrorFunction ARN",
                     "Next": "DynamoTableSelection"
                   },
                   "DynamoTableSelection": {

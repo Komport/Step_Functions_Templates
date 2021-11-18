@@ -35,7 +35,7 @@ Create new stack and deploy cloudformation template.
 #### Parameters:
 ProjectName: Set your project name.
 
-###2. State file uploaded to the S3 bucket.
+### 2. State file uploaded to the S3 bucket.
 ### Lines to change on state.json file before uploading to S3 Bucket.
 Add your region and Account ID for the StepFunctions Iteration resource.
 
