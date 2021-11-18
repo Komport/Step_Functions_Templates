@@ -57,8 +57,11 @@ Create new S3 bucket in the same region and upload state.json file.
 Create new CloudFormation stack and deploy template.
 #### Parameters:
 ProjectName: Set your project name.
+
 StateFileLocation: S3 Bucket name where your state file resides.
+
 StateFileName: Your state file name with extension.
+
 
 ![](images/State.JPG)
 
