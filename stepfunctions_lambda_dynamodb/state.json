@@ -11,7 +11,7 @@
           "States": {
             "Validate": {
               "Type": "Task",
-              "Resource": "arn:aws:lambda:us-east-1:587164557221:function:StepFunctionsIteration",
+              "Resource": "arn:aws:lambda:AWSRegion:AccountID:function:StepFunctionsIteration",
               "Next": "ProcessTransaction"
             },
             "ProcessTransaction": {
@@ -31,12 +31,12 @@
             },
             "ProcessRefund": {
               "Type": "Task",
-              "Resource": "arn:aws:lambda:us-east-1:587164557221:function:RefundFunction",
+              "Resource": "Enter your lambda function arn here",
               "Next": "DynamoTableSelection"
             },
             "ProcessPurchase": {
               "Type": "Task",
-              "Resource": "arn:aws:lambda:us-east-1:587164557221:function:PurchaseFunction",
+              "Resource": "Enter your lambda function arn here",
               "Next": "DynamoTableSelection"
             },
             "DynamoTableSelection": {
