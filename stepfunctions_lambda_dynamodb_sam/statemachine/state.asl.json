@@ -1,0 +1,138 @@
+{
+    "StartAt": "Validate-All",
+    "States": {
+      "Validate-All": {
+        "Type": "Map",
+        "InputPath": "$",
+        "ItemsPath": "$.transactions",
+        "MaxConcurrency": 0,
+        "Iterator": {
+          "StartAt": "Validate",
+          "States": {
+            "Validate": {
+              "Type": "Task",
+              "Resource": "${ValidatorFunctionArn}",
+              "Next": "ProcessTransaction"
+            },
+            "ProcessTransaction": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.Type",
+                  "StringEquals": "PURCHASE",
+                  "Next": "ProcessPurchase"
+                },
+                {
+                  "Variable": "$.Type",
+                  "StringEquals": "REFUND",
+                  "Next": "ProcessRefund"
+                }
+              ],
+              "Default": "ProcessError"
+            },
+            "ProcessRefund": {
+              "Type": "Task",
+              "Resource": "${RefundFunctionArn}",
+              "Next": "DynamoTableSelection"
+            },
+            "ProcessPurchase": {
+              "Type": "Task",
+              "Resource": "${PurchaseFunctionArn}",
+              "Next": "DynamoTableSelection"
+            },
+            "ProcessError": {
+              "Type": "Task",
+              "Resource": "${ErrorFunctionArn}",
+              "Next": "DynamoTableSelection"
+            },
+            "DynamoTableSelection": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.Type",
+                  "StringEquals": "PURCHASE",
+                  "Next": "InsertPurchase"
+                },
+                {
+                  "Variable": "$.Type",
+                  "StringEquals": "REFUND",
+                  "Next": "InsertRefund"
+                }
+              ],
+              "Default": "InsertError"
+            },
+            "InsertPurchase": {
+              "Type": "Task",
+              "Resource": "${DDBPutItem}",
+              "Parameters": {
+                "TableName": "${DDBPurchaseTable}",
+                "Item": {
+                  "TransactionId": {
+                    "S.$": "$.TransactionId"
+                  },
+                  "Type": {
+                    "S.$": "$.Type"
+                  },
+                  "Timestamp": {
+                    "S.$": "$.Timestamp"
+                  },
+                  "Message": {
+                    "S.$": "$.Message"
+                  }
+                  
+                }
+              },
+              "End": true
+            },
+            "InsertRefund": {
+              "Type": "Task",
+              "Resource": "${DDBPutItem}",
+              "Parameters": {
+                "TableName": "${DDBRefundTable}",
+                "Item": {
+                  "TransactionId": {
+                    "S.$": "$.TransactionId"
+                  },
+                  "Type": {
+                    "S.$": "$.Type"
+                  },
+                  "Timestamp": {
+                    "S.$": "$.Timestamp"
+                  },
+                  "Message": {
+                    "S.$": "$.Message"
+                  }
+                }
+              },
+              "End": true
+            },
+            "InsertError": {
+              "Type": "Task",
+              "Resource": "${DDBPutItem}",
+              "Parameters": {
+                "TableName": "${DDBErrorTable}",
+                "Item": {
+                  "TransactionId": {
+                    "S.$": "$.TransactionId"
+                  },
+                  "Type": {
+                    "S.$": "$.Type"
+                  },
+                  "Timestamp": {
+                    "S.$": "$.Timestamp"
+                  },
+                  "Message": {
+                    "S.$": "$.Message"
+                  }
+                  
+                }
+              },
+              "End": true
+            }
+          }
+        },
+        "ResultPath": "$",
+        "End": true
+      }
+    }
+  }

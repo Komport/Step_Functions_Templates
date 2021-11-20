@@ -1,0 +1,114 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  steps
+
+  Sample SAM Template for steps
+
+Resources:
+  TransactionProcessorStateMachine:
+    Type: AWS::Serverless::StateMachine # More info about State Machine Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-statemachine.html
+    Properties:
+      DefinitionUri: statemachine/state.asl.json
+      DefinitionSubstitutions:
+        ValidatorFunctionArn: !GetAtt ValidatorFunction.Arn
+        PurchaseFunctionArn: !GetAtt PurchaseFunction.Arn
+        RefundFunctionArn: !GetAtt RefundFunction.Arn
+        ErrorFunctionArn: !GetAtt ErrorFunction.Arn
+        DDBPutItem: !Sub arn:${AWS::Partition}:states:::dynamodb:putItem
+        DDBPurchaseTable: !Ref PurchaseTable
+        DDBRefundTable: !Ref RefundTable
+        DDBErrorTable: !Ref ErrorTable
+      Policies: # Find out more about SAM policy templates: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-policy-templates.html
+        - LambdaInvokePolicy:
+            FunctionName: !Ref ValidatorFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref PurchaseFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref RefundFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref ErrorFunction
+        - DynamoDBWritePolicy:
+            TableName: !Ref ErrorTable
+        - DynamoDBWritePolicy:
+            TableName: !Ref PurchaseTable
+        - DynamoDBWritePolicy:
+            TableName: !Ref RefundTable
+
+  ValidatorFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html
+    Properties:
+      CodeUri: functions/validator/
+      Handler: app.validate_all
+      Runtime: python3.9
+      Architectures:
+        - x86_64
+
+  PurchaseFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/purchase/
+      Handler: app.process_purchase
+      Runtime: python3.9
+      Architectures:
+        - x86_64
+
+  RefundFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/refund/
+      Handler: app.process_refund
+      Runtime: python3.9
+      Architectures:
+        - x86_64
+
+  ErrorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/error/
+      Handler: app.process_error
+      Runtime: python3.9
+      Architectures:
+        - x86_64
+
+  PurchaseTable:
+    Type: AWS::Serverless::SimpleTable # More info about SimpleTable Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-simpletable.html
+    Properties:
+      PrimaryKey:
+        Name: TransactionId
+        Type: String
+      ProvisionedThroughput:
+        ReadCapacityUnits: 1
+        WriteCapacityUnits: 1
+
+  RefundTable:
+    Type: AWS::Serverless::SimpleTable # More info about SimpleTable Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-simpletable.html
+    Properties:
+      PrimaryKey:
+        Name: TransactionId
+        Type: String
+      ProvisionedThroughput:
+        ReadCapacityUnits: 1
+        WriteCapacityUnits: 1
+
+  ErrorTable:
+    Type: AWS::Serverless::SimpleTable # More info about SimpleTable Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-simpletable.html
+    Properties:
+      PrimaryKey:
+        Name: TransactionId
+        Type: String
+      ProvisionedThroughput:
+        ReadCapacityUnits: 1
+        WriteCapacityUnits: 1
+
+
+Outputs:
+  # StockTradingStateMachineHourlyTradingSchedule is an implicit Schedule event rule created out of Events key under Serverless::StateMachine
+  # Find out more about other implicit resources you can reference within SAM
+  # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-specification-generated-resources.html
+  TransactionProcessorStateMachineArn:
+    Description: "Transaction Processor State machine ARN"
+    Value: !Ref TransactionProcessorStateMachine
+  TransactionProcessorStateMachineRoleArn:
+    Description: "IAM Role created for Stock Trading State machine based on the specified SAM Policy Templates"
+    Value: !GetAtt TransactionProcessorStateMachineRole.Arn
