@@ -17,7 +17,7 @@ Make sure env variable AWS_SAM_STACK_NAME exists with the name of the stack we a
 class TestStateMachine(TestCase):
     """
     This integration test will execute the step function and verify
-    - "Record Transaction" is executed
+    - Lambda Functions are executed
     - the record has been inserted into the transaction record table.
     * The inserted record will be removed when test completed.
     """
@@ -162,6 +162,7 @@ class TestStateMachine(TestCase):
     def _start_execute(self) -> str:
         """
         Start the state machine execution request and record the execution ARN
+        Test data to execute all three lambda functions. Purchase, Refund and Error. Test is going to check all of them. 
         """
         test_data = { "transactions": [
                 {"Type": "PURCHASE"},
@@ -198,7 +199,7 @@ class TestStateMachine(TestCase):
 
     def _retrieve_transaction_table_input(self, execution_arn: str) -> Dict:
         """
-        Make sure "Record Transaction" step was reached, and record the input of it.
+        Make sure all "Insert*" steps were reached, and record the input of it.
         """
         response = self.client.get_execution_history(executionArn=execution_arn,maxResults=1000)
         events = response["events"]
@@ -232,26 +233,26 @@ class TestStateMachine(TestCase):
             record_error_entered_events,
             "Cannot find InsertPurchase TaskStateEntered event",
         )
-        purchase_table_input=[]
-        refund_table_input=[]
-        error_table_input=[]
+        purchase_table_input=[] #PurchaseTable inputs
+        refund_table_input=[] # RefundTable inputs
+        error_table_input=[] # ErrorTable inputs
         for transaction in record_purchase_entered_events:
             transaction_input = json.loads(transaction["stateEnteredEventDetails"]["input"])
 
             purchase_table_input.append(transaction_input)
-            self.inserted_purchase_record_id.append(transaction_input["TransactionId"])  # save this ID for cleaning up
+            self.inserted_purchase_record_id.append(transaction_input["TransactionId"])  # save this ID for cleaning up PurchaseTable
 
         for transaction in record_refund_entered_events:
             transaction_input = json.loads(transaction["stateEnteredEventDetails"]["input"])
 
             refund_table_input.append(transaction_input)
-            self.inserted_refund_record_id.append(transaction_input["TransactionId"])  # save this ID for cleaning up
+            self.inserted_refund_record_id.append(transaction_input["TransactionId"])  # save this ID for cleaning up RefundTable
 
         for transaction in record_error_entered_events:
             transaction_input = json.loads(transaction["stateEnteredEventDetails"]["input"])
 
             error_table_input.append(transaction_input)
-            self.inserted_error_record_id.append(transaction_input["TransactionId"])  # save this ID for cleaning up
+            self.inserted_error_record_id.append(transaction_input["TransactionId"])  # save this ID for cleaning up ErrorTable
 
         return purchase_table_input, refund_table_input, error_table_input
 
