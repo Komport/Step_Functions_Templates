@@ -1,4 +1,9 @@
-# steps
+## Files
+1. template.yaml - SAM template file defined in this file. 
+2. statemachine/state.asl.json - StepFunctions state logic definition. 
+3. functions/* - Code for the Lambda function to check transaction type and generate mock data. 
+
+# Steps
 
 To build and deploy your application for the first time, run the following in your shell:
 
